@@ -260,6 +260,31 @@ io.on('connection', (socket) => {
     if (!currentRoom || !playerData) return;
     const cleanMsg = typeof message === 'string' ? message.trim().slice(0, 150) : '';
     
+    // Check for in-game moderation command: /report "username" reason or /report username reason
+    if (cleanMsg.startsWith('/report')) {
+      const reportContent = cleanMsg.slice(7).trim();
+      const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+      const timestamp = new Date().toISOString();
+      
+      console.log('\n========================================');
+      console.log('🚨 [USER ABUSE / DMCA / SAFETY REPORT]');
+      console.log(`⏰ Time: ${timestamp}`);
+      console.log(`🌐 Room: ${currentRoom}`);
+      console.log(`👤 Reported By: "${playerData.name}" (Socket: ${socket.id}, IP: ${clientIp})`);
+      console.log(`📝 Report Details: ${reportContent || '(No reason specified)'}`);
+      console.log('========================================\n');
+
+      // Send private system confirmation back only to the reporting user
+      socket.emit('chat-message', {
+        id: 'system',
+        name: '🛡️ Safety System',
+        message: 'Your report has been logged to the server for administrator review. Thank you for keeping the community safe.',
+        image: null,
+        timestamp: Date.now()
+      });
+      return;
+    }
+
     // Sanitize image attachment (only accept valid base64 data URIs under 120KB)
     let cleanImage = null;
     if (typeof image === 'string' && image.startsWith('data:image/') && image.length < 130000) {
