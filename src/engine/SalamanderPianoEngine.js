@@ -353,6 +353,16 @@ export class SalamanderPianoEngine {
       localStorage.setItem('piano_velocity_curve', curveName);
     }
   }
+
+  async setAudioOutputDevice(deviceId) {
+    if (this.audioCtx && typeof this.audioCtx.setSinkId === 'function') {
+      try {
+        await this.audioCtx.setSinkId(deviceId);
+      } catch (err) {
+        console.warn('[PianoEngine] Failed to set sinkId on AudioContext:', err);
+      }
+    }
+  }
 }
 
 

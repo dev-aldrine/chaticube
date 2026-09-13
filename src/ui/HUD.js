@@ -12,6 +12,8 @@ export class HUD {
     onVelocityCurveChange,
     onFloatingNotesToggle, 
     onToggleMic,
+    onMicDeviceChange,
+    onOutputDeviceChange,
     initialVolume = 0.70, 
     initialReverb = 0.12,
     initialVelocityCurve = 'linear',
@@ -27,6 +29,8 @@ export class HUD {
     this.onVelocityCurveChange = onVelocityCurveChange;
     this.onFloatingNotesToggle = onFloatingNotesToggle;
     this.onToggleMic = onToggleMic;
+    this.onMicDeviceChange = onMicDeviceChange;
+    this.onOutputDeviceChange = onOutputDeviceChange;
     this.isMicOn = false;
     this.isSpeaking = false;
     this.volume = initialVolume;
@@ -126,6 +130,30 @@ export class HUD {
                 <span class="volume-icon"><i class="pixelart-icons-font-radio-signal"></i></span>
                 <input type="range" id="reverb-slider" class="range-slider" min="0" max="100" value="${reverbPercent}" />
                 <span id="reverb-value-text" class="volume-val-badge">${reverbPercent}%</span>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Microphone Input</span>
+                <span class="setting-desc">Select microphone or audio input source</span>
+              </div>
+              <div class="setting-control">
+                <select id="select-mic-device" class="settings-select">
+                  <option value="">Default Microphone</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Sound Output (Speakers / Headphones)</span>
+                <span class="setting-desc">Select playback audio output device</span>
+              </div>
+              <div class="setting-control">
+                <select id="select-audio-output" class="settings-select">
+                  <option value="">Default Output Device</option>
+                </select>
               </div>
             </div>
 
@@ -546,6 +574,22 @@ export class HUD {
       }
     });
 
+    // Mic Input Device Select
+    const micDeviceSelect = this.container.querySelector('#select-mic-device');
+    micDeviceSelect?.addEventListener('change', (e) => {
+      if (this.onMicDeviceChange) {
+        this.onMicDeviceChange(e.target.value);
+      }
+    });
+
+    // Audio Output Device Select
+    const outputDeviceSelect = this.container.querySelector('#select-audio-output');
+    outputDeviceSelect?.addEventListener('change', (e) => {
+      if (this.onOutputDeviceChange) {
+        this.onOutputDeviceChange(e.target.value);
+      }
+    });
+
     // Floating Notes Toggle
     const notesToggle = this.container.querySelector('#toggle-floating-notes');
     notesToggle?.addEventListener('change', (e) => {
@@ -599,6 +643,30 @@ export class HUD {
       } else {
         dotEl.classList.add('bad');
       }
+    }
+  }
+
+  populateAudioDevices({ inputs = [], outputs = [], selectedInputId = '', selectedOutputId = '' } = {}) {
+    const micSelect = this.container.querySelector('#select-mic-device');
+    if (micSelect) {
+      const currentVal = selectedInputId || micSelect.value;
+      micSelect.innerHTML = '<option value="">Default Microphone</option>' + 
+        inputs.map(dev => `
+          <option value="${dev.deviceId}" ${dev.deviceId === currentVal ? 'selected' : ''}>
+            ${dev.label || `Microphone (${dev.deviceId.slice(0, 8)}...)`}
+          </option>
+        `).join('');
+    }
+
+    const outSelect = this.container.querySelector('#select-audio-output');
+    if (outSelect) {
+      const currentVal = selectedOutputId || outSelect.value;
+      outSelect.innerHTML = '<option value="">Default Output Device</option>' + 
+        outputs.map(dev => `
+          <option value="${dev.deviceId}" ${dev.deviceId === currentVal ? 'selected' : ''}>
+            ${dev.label || `Speaker/Headphones (${dev.deviceId.slice(0, 8)}...)`}
+          </option>
+        `).join('');
     }
   }
 

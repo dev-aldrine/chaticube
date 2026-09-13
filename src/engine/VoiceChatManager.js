@@ -25,7 +25,86 @@ export class VoiceChatManager {
     this.onMicStatusChange = null; // Callback for local UI
     this.onRemoteVoiceActivity = null; // Callback: (id, isSpeaking)
 
+    this.selectedAudioInputId = '';
+    this.selectedAudioOutputId = '';
+
     this.setupNetworkCallbacks();
+  }
+
+  async getAudioDevices() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+        return { inputs: [], outputs: [] };
+      }
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter(d => d.kind === 'audioinput');
+      const outputs = devices.filter(d => d.kind === 'audiooutput');
+      return { inputs, outputs };
+    } catch (err) {
+      console.warn('[VoiceChat] Failed to enumerate audio devices:', err);
+      return { inputs: [], outputs: [] };
+    }
+  }
+
+  async setAudioInputDevice(deviceId) {
+    this.selectedAudioInputId = deviceId;
+    if (!this.localStream) return;
+
+    try {
+      const constraints = {
+        audio: {
+          deviceId: deviceId ? { exact: deviceId } : undefined,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        video: false
+      };
+
+      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const newTrack = newStream.getAudioTracks()[0];
+      if (!newTrack) return;
+
+      newTrack.enabled = !this.isMuted;
+
+      // Replace tracks in all existing peer connections
+      for (const peer of this.peers.values()) {
+        if (peer.peerConnection) {
+          const senders = peer.peerConnection.getSenders();
+          const sender = senders.find(s => s.track && s.track.kind === 'audio');
+          if (sender) {
+            sender.replaceTrack(newTrack);
+          }
+        }
+      }
+
+      // Stop old tracks
+      this.localStream.getAudioTracks().forEach(t => t.stop());
+      this.localStream = newStream;
+
+      // Reconnect analyzer
+      if (this.audioContext) {
+        const source = this.audioContext.createMediaStreamSource(this.localStream);
+        if (this.analyser) {
+          source.connect(this.analyser);
+        }
+      }
+    } catch (err) {
+      console.warn('[VoiceChat] Error switching audio input device:', err);
+    }
+  }
+
+  async setAudioOutputDevice(deviceId) {
+    this.selectedAudioOutputId = deviceId;
+    for (const peer of this.peers.values()) {
+      if (peer.audioElement && typeof peer.audioElement.setSinkId === 'function') {
+        try {
+          await peer.audioElement.setSinkId(deviceId);
+        } catch (err) {
+          console.warn('[VoiceChat] Error setting sink ID on peer audio element:', err);
+        }
+      }
+    }
   }
 
   setupNetworkCallbacks() {
@@ -44,14 +123,19 @@ export class VoiceChatManager {
     if (this.localStream) return true;
 
     try {
-      this.localStream = await navigator.mediaDevices.getUserMedia({
+      const constraints = {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true
         },
         video: false
-      });
+      };
+      if (this.selectedAudioInputId) {
+        constraints.audio.deviceId = { exact: this.selectedAudioInputId };
+      }
+
+      this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
 
       // Mute audio tracks by default until user toggles ON
       this.localStream.getAudioTracks().forEach(t => (t.enabled = !this.isMuted));
@@ -199,6 +283,12 @@ export class VoiceChatManager {
     audio.srcObject = stream;
     audio.autoplay = true;
     audio.volume = 1.0;
+
+    if (this.selectedAudioOutputId && typeof audio.setSinkId === 'function') {
+      audio.setSinkId(this.selectedAudioOutputId).catch(err => {
+        console.warn('[VoiceChat] Failed to set sink ID on peer audio:', err);
+      });
+    }
 
     const peer = this.peers.get(targetId);
     if (peer) {

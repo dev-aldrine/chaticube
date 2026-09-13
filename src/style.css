@@ -1503,11 +1503,12 @@ html, body {
   text-align: center;
 }
 
-/* Toast Notifications */
+/* Toast Notifications (Bottom Right) */
 .toast-container {
   position: fixed;
-  top: 24px;
+  bottom: 24px;
   right: 24px;
+  top: auto;
   z-index: 100;
   display: flex;
   flex-direction: column;

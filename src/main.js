@@ -698,9 +698,26 @@ class GameApp {
         const micActive = await this.voiceChatManager.toggleMic();
         if (micActive) {
           Notifications.show('🎤 Microphone ON (Press V to mute)', 'success', 2500);
+          // Refresh device list with permissions granted labels
+          this.refreshAudioDevices();
         } else {
           Notifications.show('🔇 Microphone Muted (Press V to talk)', 'info', 2500);
         }
+      },
+      onMicDeviceChange: async (deviceId) => {
+        if (this.voiceChatManager) {
+          await this.voiceChatManager.setAudioInputDevice(deviceId);
+          Notifications.show('Microphone input device updated', 'info', 2000);
+        }
+      },
+      onOutputDeviceChange: async (deviceId) => {
+        if (this.voiceChatManager) {
+          await this.voiceChatManager.setAudioOutputDevice(deviceId);
+        }
+        if (this.pianoEngine) {
+          await this.pianoEngine.setAudioOutputDevice(deviceId);
+        }
+        Notifications.show('Audio output device updated', 'info', 2000);
       },
       onVolumeChange: (vol) => {
         this.pianoEngine.setVolume(vol);
@@ -736,6 +753,14 @@ class GameApp {
       }
     });
 
+    // Populate initial audio input & output devices
+    this.refreshAudioDevices();
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', () => {
+        this.refreshAudioDevices();
+      });
+    }
+
     this.hud.onLeavePiano = () => {
       if (this.localPlayer && this.isPlayerSeatedAtPiano) {
         this.localPlayer.unlockFromPiano();
@@ -759,6 +784,17 @@ class GameApp {
     this.lastFrameTime = performance.now();
     this.tick = this.tick.bind(this);
     requestAnimationFrame(this.tick);
+  }
+
+  async refreshAudioDevices() {
+    if (!this.voiceChatManager || !this.hud) return;
+    const { inputs, outputs } = await this.voiceChatManager.getAudioDevices();
+    this.hud.populateAudioDevices({
+      inputs,
+      outputs,
+      selectedInputId: this.voiceChatManager.selectedAudioInputId,
+      selectedOutputId: this.voiceChatManager.selectedAudioOutputId
+    });
   }
 
   setupConsoleCommands() {
