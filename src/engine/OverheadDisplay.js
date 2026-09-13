@@ -6,6 +6,9 @@ export class OverheadDisplay {
     this.isSelf = isSelf;
     this.accentColor = color;
     this.ping = ping;
+
+    this.isMicOn = false;
+    this.isSpeaking = false;
     
     // Array of { text, createdAt, duration: 6000, opacity: 1.0 }
     this.chatBubbles = [];
@@ -46,6 +49,14 @@ export class OverheadDisplay {
     const val = Math.max(0, Math.round(pingMs || 0));
     if (this.ping !== val) {
       this.ping = val;
+      this.needsRedraw = true;
+    }
+  }
+
+  setMicStatus(isMicOn, isSpeaking = false) {
+    if (this.isMicOn !== isMicOn || this.isSpeaking !== isSpeaking) {
+      this.isMicOn = isMicOn;
+      this.isSpeaking = isSpeaking;
       this.needsRedraw = true;
     }
   }
@@ -132,22 +143,33 @@ export class OverheadDisplay {
     ctx.font = '600 20px monospace';
     const pingMetrics = ctx.measureText(pingText);
 
+    // Dynamic mic badge width offset if mic is ON
+    const micWidthOffset = this.isMicOn ? 32 : 0;
     const tagPaddingLeft = 40;
     const tagPaddingRight = 24;
     const spacingBetween = 18;
-    const tagWidth = Math.max(190, tagPaddingLeft + nameMetrics.width + spacingBetween + pingMetrics.width + tagPaddingRight);
+    const tagWidth = Math.max(190, tagPaddingLeft + nameMetrics.width + spacingBetween + pingMetrics.width + tagPaddingRight + micWidthOffset);
     const tagHeight = 48;
     const tagX = centerX - tagWidth / 2;
 
     // Background pill (Dark Glass)
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    ctx.fillStyle = this.isSpeaking ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.92)';
     this.roundRect(ctx, tagX, nameTagY, tagWidth, tagHeight, 24);
     ctx.fill();
 
-    // Border (Self highlighted)
-    ctx.strokeStyle = this.isSelf ? 'rgba(99, 102, 241, 0.9)' : 'rgba(255, 255, 255, 0.28)';
-    ctx.lineWidth = 2.5;
+    // Border (Glowing green when speaking, purple when self, subtle white otherwise)
+    if (this.isSpeaking) {
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = 'rgba(16, 185, 129, 0.8)';
+      ctx.shadowBlur = 14;
+    } else {
+      ctx.strokeStyle = this.isSelf ? 'rgba(99, 102, 241, 0.9)' : 'rgba(255, 255, 255, 0.28)';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = 'transparent';
+    }
     ctx.stroke();
+    ctx.shadowColor = 'transparent';
 
     // Left player status dot (Shirt color)
     ctx.fillStyle = this.accentColor || '#6366f1';
@@ -161,6 +183,36 @@ export class OverheadDisplay {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(this.name, tagX + tagPaddingLeft, nameTagY + tagHeight / 2 + 1);
+
+    // Draw Mic Indicator Badge if Mic is ON
+    if (this.isMicOn) {
+      const micX = tagX + tagPaddingLeft + nameMetrics.width + 12;
+      const micY = nameTagY + tagHeight / 2;
+
+      // Draw Green Mic Pill / Circle
+      ctx.fillStyle = this.isSpeaking ? '#10b981' : '#059669';
+      ctx.beginPath();
+      ctx.arc(micX + 10, micY, 11, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw small microphone icon symbol
+      ctx.fillStyle = '#ffffff';
+      // Mic capsule
+      ctx.beginPath();
+      this.roundRect(ctx, micX + 8, micY - 6, 4, 8, 2);
+      ctx.fill();
+      // Mic base
+      ctx.beginPath();
+      ctx.arc(micX + 10, micY - 1, 4.5, 0, Math.PI);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      // Stand line
+      ctx.beginPath();
+      ctx.moveTo(micX + 10, micY + 3.5);
+      ctx.lineTo(micX + 10, micY + 6);
+      ctx.stroke();
+    }
 
     // Live Ping text & Ping quality color
     const pingColor = (this.ping < 80) ? '#34d399' : (this.ping < 160) ? '#facc15' : '#f87171';

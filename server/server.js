@@ -277,6 +277,27 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ==========================================
+  // WebRTC P2P Voice Chat Signaling & Mic State
+  // ==========================================
+  socket.on('voice-signal', ({ targetId, signal }) => {
+    if (!currentRoom || !targetId) return;
+    // Relay WebRTC offer / answer / ICE candidate directly to target peer
+    io.to(targetId).emit('voice-signal', {
+      senderId: socket.id,
+      signal
+    });
+  });
+
+  socket.on('mic-status', ({ isMuted, isSpeaking }) => {
+    if (!currentRoom) return;
+    socket.to(currentRoom).emit('player-mic-status', {
+      id: socket.id,
+      isMuted: Boolean(isMuted),
+      isSpeaking: Boolean(isSpeaking)
+    });
+  });
+
   function handleLeaveRoom() {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);

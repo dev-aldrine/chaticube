@@ -419,6 +419,12 @@ export class LocalPlayer {
     }
   }
 
+  setMicStatus(isMicOn, isSpeaking) {
+    if (this.overhead) {
+      this.overhead.setMicStatus(isMicOn, isSpeaking);
+    }
+  }
+
   destroy() {
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);

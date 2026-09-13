@@ -243,6 +243,12 @@ export class RemotePlayer {
     }
   }
 
+  setMicStatus(isMicOn, isSpeaking) {
+    if (this.overhead) {
+      this.overhead.setMicStatus(isMicOn, isSpeaking);
+    }
+  }
+
   destroy() {
     if (this.overhead) {
       this.overhead.destroy();

@@ -19,6 +19,8 @@ export class NetworkManager {
       onPianoOccupied: null,
       onPianoNote: null,
       onPianoSustain: null,
+      onVoiceSignal: null,
+      onPlayerMicStatus: null,
       onPingUpdate: null,
       onPlayerPing: null,
       onConnect: null,
@@ -89,6 +91,14 @@ export class NetworkManager {
       if (this.callbacks.onChatMessage) this.callbacks.onChatMessage(data);
     });
 
+    this.socket.on('voice-signal', (data) => {
+      if (this.callbacks.onVoiceSignal) this.callbacks.onVoiceSignal(data);
+    });
+
+    this.socket.on('player-mic-status', (data) => {
+      if (this.callbacks.onPlayerMicStatus) this.callbacks.onPlayerMicStatus(data);
+    });
+
     this.socket.on('worlds-updated', (data) => {
       if (this.callbacks.onWorldsUpdated) this.callbacks.onWorldsUpdated(data);
     });
@@ -102,6 +112,16 @@ export class NetworkManager {
   leaveRoom() {
     if (!this.socket) return;
     this.socket.emit('leave-room');
+  }
+
+  sendVoiceSignal(targetId, signal) {
+    if (!this.socket || !this.isConnected) return;
+    this.socket.emit('voice-signal', { targetId, signal });
+  }
+
+  sendMicStatus(isMuted, isSpeaking) {
+    if (!this.socket || !this.isConnected) return;
+    this.socket.emit('mic-status', { isMuted, isSpeaking });
   }
 
   sendPlayerUpdate(data) {

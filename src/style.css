@@ -694,6 +694,31 @@ html, body {
   transform: translateY(-1px);
 }
 
+.hud-mic-btn {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #94a3b8;
+}
+
+.hud-mic-btn.active {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
+  color: #34d399;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+}
+
+.hud-mic-btn.active.speaking {
+  background: rgba(16, 185, 129, 0.45);
+  border-color: #34d399;
+  color: #ffffff;
+  box-shadow: 0 0 24px rgba(52, 211, 153, 0.7);
+  animation: micPulse 0.8s infinite alternate ease-in-out;
+}
+
+@keyframes micPulse {
+  0% { transform: scale(1); box-shadow: 0 0 12px rgba(16, 185, 129, 0.4); }
+  100% { transform: scale(1.04); box-shadow: 0 0 24px rgba(52, 211, 153, 0.9); }
+}
+
 .hud-exit-btn:hover {
   background: rgba(239, 68, 68, 0.25);
   border-color: rgba(239, 68, 68, 0.5);

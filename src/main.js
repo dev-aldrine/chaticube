@@ -12,6 +12,7 @@ import { PaletteManager, COLOR_PALETTES } from './lobby/PaletteManager.js';
 import { WorldsBrowser } from './lobby/WorldsBrowser.js';
 import { NetworkManager } from './network/NetworkManager.js';
 import { SalamanderPianoEngine } from './engine/SalamanderPianoEngine.js';
+import { VoiceChatManager } from './engine/VoiceChatManager.js';
 import { MidiManager } from './engine/MidiManager.js';
 import { PianoInteractPrompt } from './engine/PianoInteractPrompt.js';
 import { HUD } from './ui/HUD.js';
@@ -25,6 +26,7 @@ class GameApp {
     this.assetLoader = new AssetLoader();
     this.networkManager = new NetworkManager();
     this.pianoEngine = new SalamanderPianoEngine();
+    this.voiceChatManager = null;
     this.midiManager = null;
 
     this.characterStudio = null;
@@ -264,6 +266,11 @@ class GameApp {
       this.remotePlayers.set(data.id, remote);
       Notifications.show(`${data.name} joined the room!`, 'info', 2500);
 
+      // Connect WebRTC Voice Peer (Existing players initiate to newcomer)
+      if (this.voiceChatManager) {
+        this.voiceChatManager.connectToPeer(data.id, true);
+      }
+
       this.updateHUDPlayerList();
     };
 
@@ -288,6 +295,11 @@ class GameApp {
         Notifications.show(`${remote.name} left the room`, 'info', 2000);
         remote.destroy();
         this.remotePlayers.delete(id);
+
+        if (this.voiceChatManager) {
+          this.voiceChatManager.removePeer(id);
+        }
+
         this.updateHUDPlayerList();
       }
     };
@@ -636,6 +648,43 @@ class GameApp {
       }
     });
 
+    // Voice Chat Manager (Peer-to-Peer Spatial Audio with $0 server cost)
+    if (this.voiceChatManager) {
+      this.voiceChatManager.destroy();
+    }
+    this.voiceChatManager = new VoiceChatManager({
+      networkManager: this.networkManager,
+      getLocalPlayerPosition: () => (this.localPlayer?.mesh ? this.localPlayer.mesh.position : null),
+      getRemotePlayerPosition: (id) => {
+        const remote = this.remotePlayers.get(id);
+        return remote?.mesh ? remote.mesh.position : null;
+      }
+    });
+
+    this.voiceChatManager.onMicStatusChange = (isMuted, isSpeaking) => {
+      const isMicOn = !isMuted;
+      if (this.hud) {
+        this.hud.updateMicStatusUI(isMicOn, isSpeaking);
+      }
+      if (this.localPlayer) {
+        this.localPlayer.setMicStatus(isMicOn, isSpeaking);
+      }
+    };
+
+    this.voiceChatManager.onRemoteVoiceActivity = (id, { isMuted, isSpeaking }) => {
+      const remote = this.remotePlayers.get(id);
+      if (remote) {
+        remote.setMicStatus(!isMuted, isSpeaking);
+      }
+    };
+
+    // Connect to all existing remote players in the room
+    roomData.players.forEach(p => {
+      if (p.id !== roomData.selfId) {
+        this.voiceChatManager.connectToPeer(p.id, true);
+      }
+    });
+
     // HUD Setup
     const hudContainer = document.getElementById('hud-container');
     this.hud = new HUD({
@@ -644,6 +693,15 @@ class GameApp {
       initialReverb: this.pianoEngine.reverbLevel,
       initialVelocityCurve: this.pianoEngine.velocityCurve,
       initialFloatingNotes: this.showFloatingNotes,
+      onToggleMic: async () => {
+        if (!this.voiceChatManager) return;
+        const micActive = await this.voiceChatManager.toggleMic();
+        if (micActive) {
+          Notifications.show('🎤 Microphone ON (Press V to mute)', 'success', 2500);
+        } else {
+          Notifications.show('🔇 Microphone Muted (Press V to talk)', 'info', 2500);
+        }
+      },
       onVolumeChange: (vol) => {
         this.pianoEngine.setVolume(vol);
       },
@@ -1032,6 +1090,10 @@ class GameApp {
       this.cursorIndicator.geometry?.dispose();
       this.cursorIndicator = null;
     }
+    if (this.voiceChatManager) {
+      this.voiceChatManager.destroy();
+      this.voiceChatManager = null;
+    }
     if (this.localPlayer) this.localPlayer.destroy();
     for (const remote of this.remotePlayers.values()) {
       remote.destroy();
@@ -1233,6 +1295,11 @@ class GameApp {
 
     // Smooth Atmospheric Light Dimming Transition (Cozy concert hall focus)
     this.updateAtmosphericLighting(delta);
+
+    // Update 3D Positional Voice Spatial Audio Volume
+    if (this.voiceChatManager) {
+      this.voiceChatManager.updateSpatialAudioPositions();
+    }
 
     // Update Remote Players Lerp & Animation
     for (const remote of this.remotePlayers.values()) {

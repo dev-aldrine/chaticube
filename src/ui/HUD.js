@@ -11,6 +11,7 @@ export class HUD {
     onReverbChange,
     onVelocityCurveChange,
     onFloatingNotesToggle, 
+    onToggleMic,
     initialVolume = 0.70, 
     initialReverb = 0.12,
     initialVelocityCurve = 'linear',
@@ -25,6 +26,9 @@ export class HUD {
     this.onReverbChange = onReverbChange;
     this.onVelocityCurveChange = onVelocityCurveChange;
     this.onFloatingNotesToggle = onFloatingNotesToggle;
+    this.onToggleMic = onToggleMic;
+    this.isMicOn = false;
+    this.isSpeaking = false;
     this.volume = initialVolume;
     this.reverbLevel = initialReverb;
     this.velocityCurve = initialVelocityCurve;
@@ -66,6 +70,11 @@ export class HUD {
         </div>
 
         <div class="hud-right">
+          <!-- Live Voice Chat Mic Toggle Button (Press V or Click) -->
+          <button id="btn-toggle-mic" class="hud-icon-btn hud-mic-btn" title="Toggle Microphone (V)" aria-label="Toggle Mic">
+            <i id="hud-mic-icon" class="pixelart-icons-font-audio-device-headphone"></i>
+            <span id="hud-mic-label" class="btn-text">Mic OFF</span>
+          </button>
           <!-- Mobile Chat Button (Icon only) -->
           <button id="btn-open-mobile-chat" class="hud-icon-btn mobile-only hud-chat-btn" title="Open Chat" aria-label="Open Chat">
             <i class="pixelart-icons-font-message"></i>
@@ -465,6 +474,20 @@ export class HUD {
     // Exit World Button
     this.container.querySelector('#btn-exit-world').addEventListener('click', () => {
       if (this.onExitRoom) this.onExitRoom();
+    });
+
+    // Mic Toggle Button
+    const micBtn = this.container.querySelector('#btn-toggle-mic');
+    micBtn?.addEventListener('click', () => {
+      if (this.onToggleMic) this.onToggleMic();
+    });
+
+    // Keyboard shortcut 'V' to toggle mic
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (e.key === 'v' || e.key === 'V') {
+        if (this.onToggleMic) this.onToggleMic();
+      }
     });
 
     // Toggle Settings Modal
@@ -927,6 +950,31 @@ export class HUD {
         }
       }, 150);
     });
+  }
+
+  updateMicStatusUI(isMicOn, isSpeaking = false) {
+    this.isMicOn = isMicOn;
+    this.isSpeaking = isSpeaking;
+    const micBtn = this.container.querySelector('#btn-toggle-mic');
+    const micIcon = this.container.querySelector('#hud-mic-icon');
+    const micLabel = this.container.querySelector('#hud-mic-label');
+
+    if (!micBtn) return;
+
+    if (isMicOn) {
+      micBtn.classList.add('active');
+      if (isSpeaking) {
+        micBtn.classList.add('speaking');
+      } else {
+        micBtn.classList.remove('speaking');
+      }
+      if (micIcon) micIcon.className = 'pixelart-icons-font-audio-device-headphone';
+      if (micLabel) micLabel.textContent = isSpeaking ? 'Talking...' : 'Mic ON';
+    } else {
+      micBtn.classList.remove('active', 'speaking');
+      if (micIcon) micIcon.className = 'pixelart-icons-font-audio-device-headphone';
+      if (micLabel) micLabel.textContent = 'Mic OFF';
+    }
   }
 
   escapeHTML(str) {
