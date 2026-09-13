@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+    <meta charset="UTF-8" />
+    <!-- 1. Lock zoom scale, cover safe-area notches, and resize dynamically for virtual keyboards -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    
+    <!-- 2. Web App Capabilities (Fullscreen Standalone Mode) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#090d16" />
+
+    <title>Chaticube &bull; 3D Isometric Multiplayer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <!-- 3D Game World Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- In-Game HUD (Overlaid on canvas) -->
+    <div id="hud-container" class="hidden"></div>
+
+    <!-- Loading Screen Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+      <div class="loading-card-inner">
+        <div class="spinner-cube"></div>
+        <div id="loading-title-text" class="loading-title">Entering World...</div>
+        <div id="loading-sub-text" class="loading-subtext">Warming up 3D environment & audio engine...</div>
+        <div class="loading-bar-track">
+          <div id="loading-bar-fill" class="loading-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lobby & Character Studio Overlay -->
+    <div id="lobby-overlay" class="lobby-overlay">
+      <div class="lobby-card">
+        <!-- Header -->
+        <header class="lobby-header">
+          <div class="lobby-logo">
+            <span class="logo-icon"><i class="pixelart-icons-font-sparkles"></i></span>
+            <div>
+              <h1 class="logo-title">CHATICUBE</h1>
+              <p class="lobby-tagline">Where Cubies Hang out!</p>
+            </div>
+          </div>
+          <div class="header-status">
+            <span class="pulse-dot"></span>
+            <span id="server-status-text">Server Online</span>
+          </div>
+        </header>
+
+        <!-- Body -->
+        <div class="lobby-body">
+          <!-- LEFT: 3D Character Studio -->
+          <section class="character-studio">
+            <div class="avatar-preview-container">
+              <canvas id="character-preview-canvas"></canvas>
+              <span class="preview-badge"><i class="pixelart-icons-font-eye" style="font-size: 14px; margin-right: 4px;"></i> 360° Interactive</span>
+            </div>
+
+            <div class="studio-controls">
+              <!-- Skin Swatches -->
+              <div class="swatch-group">
+                <label class="swatch-label">Skin Tone</label>
+                <div id="skin-swatches" class="swatch-options"></div>
+              </div>
+
+              <!-- Shirt Swatches -->
+              <div class="swatch-group">
+                <label class="swatch-label">Shirt Color</label>
+                <div id="shirt-swatches" class="swatch-options"></div>
+              </div>
+
+              <!-- Pants Swatches -->
+              <div class="swatch-group">
+                <label class="swatch-label">Pants Color</label>
+                <div id="pants-swatches" class="swatch-options"></div>
+              </div>
+
+              <button type="button" id="btn-random-avatar" class="btn-secondary">
+                <i class="pixelart-icons-font-shuffle" style="font-size: 16px;"></i> Randomize Look & Name
+              </button>
+            </div>
+          </section>
+
+          <!-- RIGHT: Portal & Live Worlds -->
+          <section class="portal-panel">
+            <div class="portal-tabs">
+              <button type="button" class="tab-btn active" data-tab="play"><i class="pixelart-icons-font-login" style="font-size: 14px; margin-right: 6px;"></i> Enter World</button>
+              <button type="button" class="tab-btn" data-tab="worlds"><i class="pixelart-icons-font-globe" style="font-size: 14px; margin-right: 6px;"></i> Worlds Directory</button>
+            </div>
+
+            <!-- Join / Create Room Form -->
+            <form id="join-room-form" class="join-form-section">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label" for="player-name-input">Character Nickname</label>
+                  <input type="text" id="player-name-input" class="input-glass" placeholder="Your name..." maxlength="18" required />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="room-name-input">World / Room Name</label>
+                  <input type="text" id="room-name-input" class="input-glass" placeholder="e.g. cozy-lounge" maxlength="24" required />
+                </div>
+              </div>
+
+              <button type="submit" id="btn-enter-world" class="btn-primary">
+                <span>Enter World</span> <i class="pixelart-icons-font-arrow-right" style="font-size: 16px;"></i>
+              </button>
+            </form>
+
+            <!-- Live Active Worlds -->
+            <div class="worlds-section-header">
+              <span class="section-title">Active Public Worlds</span>
+              <input type="text" id="world-search-input" class="input-glass" style="padding: 6px 12px; font-size: 12px;" placeholder="Search worlds..." />
+            </div>
+
+            <div id="worlds-list-container" class="worlds-scroll-list"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- Application Script -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "chaticube",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server/server.js",
+    "start": "node server/server.js",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pixelarticons": "^2.4.1",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
+    "three": "^0.174.0"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}
