@@ -1979,6 +1979,9 @@ html, body {
 
 /* Responsive adjustments */
 @media (max-width: 860px) {
+  .toast-container {
+    display: none !important;
+  }
   .mobile-only {
     display: inline-flex !important;
   }
