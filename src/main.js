@@ -188,8 +188,7 @@ class GameApp {
     // Join Room Form
     document.getElementById('join-room-form')?.addEventListener('submit', (e) => {
       e.preventDefault();
-      const hasAgreed = localStorage.getItem('chaticube_terms_agreed') === 'true';
-      if (!hasAgreed) {
+      if (!this.hasAcceptedTermsThisSession) {
         this.openTermsModal();
         return;
       }
@@ -202,6 +201,7 @@ class GameApp {
   }
 
   setupTermsModal() {
+    this.hasAcceptedTermsThisSession = false;
     const overlay = document.getElementById('terms-modal-overlay');
     const checkbox = document.getElementById('checkbox-agree-terms');
     const acceptBtn = document.getElementById('btn-accept-terms');
@@ -209,11 +209,10 @@ class GameApp {
 
     if (!overlay || !checkbox || !acceptBtn) return;
 
-    // Check if user has previously agreed
-    const hasAgreed = localStorage.getItem('chaticube_terms_agreed') === 'true';
-    if (!hasAgreed) {
-      overlay.classList.remove('hidden');
-    }
+    // Always show the terms modal on every website load
+    overlay.classList.remove('hidden');
+    checkbox.checked = false;
+    acceptBtn.disabled = true;
 
     // Toggle button state based on agreement checkbox
     checkbox.addEventListener('change', () => {
@@ -223,7 +222,7 @@ class GameApp {
     // Accept button click
     acceptBtn.addEventListener('click', () => {
       if (checkbox.checked) {
-        localStorage.setItem('chaticube_terms_agreed', 'true');
+        this.hasAcceptedTermsThisSession = true;
         overlay.classList.add('hidden');
         Notifications.show('Terms of Service accepted', 'success', 2000);
       }
@@ -232,8 +231,10 @@ class GameApp {
     // Manual view from footer button
     openBtn?.addEventListener('click', () => {
       overlay.classList.remove('hidden');
-      checkbox.checked = true;
-      acceptBtn.disabled = false;
+      if (this.hasAcceptedTermsThisSession) {
+        checkbox.checked = true;
+        acceptBtn.disabled = false;
+      }
     });
   }
 
