@@ -98,6 +98,9 @@ class GameApp {
     this.lastFrameTime = performance.now();
     this.isLoopRunning = false;
 
+    // Initialize Terms of Service modal immediately so user can read/accept during preload
+    this.setupTermsModal();
+
     this.init();
   }
 
@@ -201,7 +204,10 @@ class GameApp {
   }
 
   setupTermsModal() {
+    if (this._termsModalInitialized) return;
+    this._termsModalInitialized = true;
     this.hasAcceptedTermsThisSession = false;
+
     const overlay = document.getElementById('terms-modal-overlay');
     const checkbox = document.getElementById('checkbox-agree-terms');
     const acceptBtn = document.getElementById('btn-accept-terms');

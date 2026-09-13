@@ -2483,5 +2483,45 @@ html, body {
   pointer-events: none;
 }
 
+@media (max-width: 600px) {
+  .terms-modal-overlay {
+    padding: 10px;
+  }
+  .terms-card {
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    border-radius: var(--radius-md);
+  }
+  .terms-header {
+    padding: 14px 16px;
+  }
+  .terms-header h3 {
+    font-size: 15px;
+  }
+  .terms-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+  .terms-body-scroll {
+    padding: 14px 16px;
+    font-size: 12px;
+    gap: 14px;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+  .terms-footer {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+  .terms-checkbox-label {
+    font-size: 12px;
+  }
+  .btn-accept-terms {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+}
+
 
 
