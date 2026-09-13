@@ -150,6 +150,29 @@ export class VoiceChatManager {
       source.connect(this.analyser);
 
       this.startVoiceActivityDetection();
+
+      // Renegotiate with all peers to add audio track
+      for (const [targetId, peer] of this.peers.entries()) {
+        if (peer.peerConnection) {
+          const track = this.localStream.getAudioTracks()[0];
+          if (track) {
+            const existingSender = peer.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+            if (existingSender) {
+              await existingSender.replaceTrack(track);
+            } else {
+              peer.peerConnection.addTrack(track, this.localStream);
+              try {
+                const offer = await peer.peerConnection.createOffer();
+                await peer.peerConnection.setLocalDescription(offer);
+                this.networkManager.sendVoiceSignal(targetId, { sdp: peer.peerConnection.localDescription });
+              } catch (e) {
+                console.warn('[VoiceChat] Error renegotiating after mic init:', e);
+              }
+            }
+          }
+        }
+      }
+
       return true;
     } catch (err) {
       console.warn('[VoiceChat] Microphone access denied or unavailable:', err);
@@ -209,9 +232,24 @@ export class VoiceChatManager {
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-    // Add local mic stream tracks if available
-    if (this.localStream) {
+    const peerInfo = {
+      peerConnection: pc,
+      remoteStream: null,
+      audioElement: null,
+      pendingCandidates: []
+    };
+    this.peers.set(targetId, peerInfo);
+
+    // Add local mic stream tracks if available, or create dummy audio transceiver for two-way audio
+    if (this.localStream && this.localStream.getAudioTracks().length > 0) {
       this.localStream.getTracks().forEach(track => pc.addTrack(track, this.localStream));
+    } else {
+      // Ensure browser is prepared to receive remote audio even if local mic is not yet enabled
+      try {
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+      } catch (e) {
+        // Fallback for older WebRTC implementations
+      }
     }
 
     // Send ICE candidates to peer
@@ -223,19 +261,13 @@ export class VoiceChatManager {
 
     // Receive remote audio stream with 3D positional audio
     pc.ontrack = (event) => {
-      const remoteStream = event.streams[0];
+      const remoteStream = event.streams[0] || new MediaStream([event.track]);
       this.setupSpatialAudioForPeer(targetId, remoteStream);
     };
 
-    this.peers.set(targetId, {
-      peerConnection: pc,
-      remoteStream: null,
-      audioElement: null
-    });
-
     if (isInitiator) {
       try {
-        const offer = await pc.createOffer();
+        const offer = await pc.createOffer({ offerToReceiveAudio: true });
         await pc.setLocalDescription(offer);
         this.networkManager.sendVoiceSignal(targetId, { sdp: pc.localDescription });
       } catch (err) {
@@ -257,8 +289,21 @@ export class VoiceChatManager {
     try {
       if (signal.sdp) {
         await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+        // Flush any ICE candidates that arrived before remoteDescription was set
+        if (peer.pendingCandidates && peer.pendingCandidates.length > 0) {
+          for (const cand of peer.pendingCandidates) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(cand));
+            } catch (e) {
+              console.warn('[VoiceChat] Error adding queued candidate:', e);
+            }
+          }
+          peer.pendingCandidates = [];
+        }
+
         if (signal.sdp.type === 'offer') {
-          // If we have local stream, ensure tracks are added
+          // If we have local stream, ensure audio track is added
           if (this.localStream) {
             this.localStream.getTracks().forEach(t => {
               if (!pc.getSenders().find(s => s.track === t)) {
@@ -271,7 +316,13 @@ export class VoiceChatManager {
           this.networkManager.sendVoiceSignal(senderId, { sdp: pc.localDescription });
         }
       } else if (signal.candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        if (pc.remoteDescription && pc.remoteDescription.type) {
+          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        } else {
+          // Queue candidate until remoteDescription is set
+          if (!peer.pendingCandidates) peer.pendingCandidates = [];
+          peer.pendingCandidates.push(signal.candidate);
+        }
       }
     } catch (err) {
       console.warn(`[VoiceChat] Signal error with ${senderId}:`, err);
@@ -279,10 +330,38 @@ export class VoiceChatManager {
   }
 
   setupSpatialAudioForPeer(targetId, stream) {
-    const audio = new Audio();
+    let peer = this.peers.get(targetId);
+    if (!peer) return;
+
+    let audio = peer.audioElement;
+    if (!audio) {
+      audio = document.createElement('audio');
+      audio.autoplay = true;
+      audio.playsInline = true;
+      audio.volume = 1.0;
+      // Attach to document to ensure reliable playback across all desktop browsers
+      audio.style.display = 'none';
+      document.body.appendChild(audio);
+    }
+
     audio.srcObject = stream;
-    audio.autoplay = true;
-    audio.volume = 1.0;
+
+    // Trigger play() with promise catch to handle browser autoplay policies
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        // Autoplay policy prevented immediate playback; unlock on user interaction
+        const unlockAudio = () => {
+          audio.play().catch(() => {});
+          window.removeEventListener('click', unlockAudio);
+          window.removeEventListener('keydown', unlockAudio);
+          window.removeEventListener('touchstart', unlockAudio);
+        };
+        window.addEventListener('click', unlockAudio, { once: true });
+        window.addEventListener('keydown', unlockAudio, { once: true });
+        window.addEventListener('touchstart', unlockAudio, { once: true });
+      });
+    }
 
     if (this.selectedAudioOutputId && typeof audio.setSinkId === 'function') {
       audio.setSinkId(this.selectedAudioOutputId).catch(err => {
@@ -290,11 +369,8 @@ export class VoiceChatManager {
       });
     }
 
-    const peer = this.peers.get(targetId);
-    if (peer) {
-      peer.remoteStream = stream;
-      peer.audioElement = audio;
-    }
+    peer.remoteStream = stream;
+    peer.audioElement = audio;
   }
 
   updateSpatialAudioPositions() {
@@ -302,21 +378,28 @@ export class VoiceChatManager {
     if (!localPos) return;
 
     for (const [id, peer] of this.peers.entries()) {
-      if (peer.audioElement && this.getRemotePlayerPosition) {
-        const remotePos = this.getRemotePlayerPosition(id);
-        if (remotePos) {
-          const dist = localPos.distanceTo(remotePos);
-          // Realistic inverse distance falloff (Clear within 8m, fades smoothly to 0 by 30m)
-          const MAX_DISTANCE = 28.0;
-          const MIN_DISTANCE = 3.5;
-          if (dist <= MIN_DISTANCE) {
-            peer.audioElement.volume = 1.0;
-          } else if (dist >= MAX_DISTANCE) {
-            peer.audioElement.volume = 0.0;
+      if (peer.audioElement) {
+        if (this.getRemotePlayerPosition) {
+          const remotePos = this.getRemotePlayerPosition(id);
+          if (remotePos) {
+            const dist = localPos.distanceTo(remotePos);
+            // Realistic inverse distance falloff (Clear within 8m, fades smoothly to 0 by 30m)
+            const MAX_DISTANCE = 28.0;
+            const MIN_DISTANCE = 3.5;
+            if (dist <= MIN_DISTANCE) {
+              peer.audioElement.volume = 1.0;
+            } else if (dist >= MAX_DISTANCE) {
+              peer.audioElement.volume = 0.0;
+            } else {
+              const factor = 1.0 - (dist - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE);
+              peer.audioElement.volume = Math.max(0, Math.min(1.0, factor * factor));
+            }
           } else {
-            const factor = 1.0 - (dist - MIN_DISTANCE) / (MAX_DISTANCE - MIN_DISTANCE);
-            peer.audioElement.volume = Math.max(0, Math.min(1.0, factor * factor));
+            // Position not yet resolved, keep audible at default level
+            peer.audioElement.volume = 1.0;
           }
+        } else {
+          peer.audioElement.volume = 1.0;
         }
       }
     }
