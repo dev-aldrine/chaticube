@@ -299,6 +299,7 @@ export class HUD {
       <div id="mobile-chat-bar" class="mobile-chat-bar hidden">
         <form id="mobile-chat-form" class="mobile-chat-form">
           <input type="file" id="mobile-chat-file-input" accept="image/png, image/jpeg, image/webp, image/gif" style="display: none;" />
+          <button type="button" id="btn-close-mobile-chat-bar" class="btn-mobile-chat-cancel" title="Close Chat"><i class="pixelart-icons-font-close"></i></button>
           <button type="button" id="btn-mobile-attach" class="btn-mobile-chat-attach" title="Attach Image"><i class="pixelart-icons-font-image"></i></button>
           <input 
             type="text" 
@@ -310,8 +311,7 @@ export class HUD {
             autocapitalize="off" 
             spellcheck="false"
           />
-          <button type="submit" class="btn-mobile-chat-send"><i class="pixelart-icons-font-send"></i></button>
-          <button type="button" id="btn-close-mobile-chat-bar" class="btn-mobile-chat-cancel"><i class="pixelart-icons-font-close"></i></button>
+          <button type="submit" class="btn-mobile-chat-send" title="Send Message"><i class="pixelart-icons-font-send"></i></button>
         </form>
       </div>
 
