@@ -23,9 +23,18 @@ const PORT = process.env.PORT || 3000;
 app.use('/assets', express.static(path.join(rootDir, 'assets')));
 app.use(express.static(path.join(rootDir, 'dist')));
 
-// In-Memory Multiplayer State
+// In-Memory Multiplayer State & Moderation
 // roomName -> { ownerId, ownerName, createdAt, players: Map(socketId -> playerData), blocks: Map(key -> blockData) }
 const rooms = new Map();
+const bannedIPs = new Set(); // Banned IP addresses
+
+function getClientIp(socket) {
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return socket.handshake.address || socket.conn.remoteAddress || 'unknown';
+}
 
 function getOrCreateRoom(roomName, socketId, playerName) {
   let room = rooms.get(roomName);
@@ -72,6 +81,16 @@ app.get('/api/worlds', (req, res) => {
 
 // Socket.io Real-Time Protocol
 io.on('connection', (socket) => {
+  const clientIp = getClientIp(socket);
+
+  // Check if connecting IP is banned
+  if (bannedIPs.has(clientIp)) {
+    console.log(`🚫 [Banned IP Blocked] Connection rejected from: ${clientIp}`);
+    socket.emit('banned', { reason: 'Your IP address has been banned for Terms of Service violations.' });
+    socket.disconnect(true);
+    return;
+  }
+
   let currentRoom = null;
   let playerData = null;
 
@@ -127,6 +146,7 @@ io.on('connection', (socket) => {
 
     playerData = {
       id: socket.id,
+      ip: clientIp,
       name: cleanName,
       colors: colors || { skin: '#ffd1b3', shirt: '#4f46e5', pants: '#2563eb', hair: '#4b382a' },
       x: spawnX,
@@ -263,22 +283,60 @@ io.on('connection', (socket) => {
     // Check for in-game moderation command: /report "username" reason or /report username reason
     if (cleanMsg.startsWith('/report')) {
       const reportContent = cleanMsg.slice(7).trim();
-      const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+      const clientIp = playerData.ip || getClientIp(socket);
       const timestamp = new Date().toISOString();
+      const room = rooms.get(currentRoom);
+
+      // Parse target username if provided (e.g. /report "TargetUser" reason OR /report TargetUser reason)
+      let targetName = '';
+      let reportReason = reportContent;
       
+      const quotedMatch = reportContent.match(/^"([^"]+)"\s*(.*)$/);
+      if (quotedMatch) {
+        targetName = quotedMatch[1].trim();
+        reportReason = quotedMatch[2].trim();
+      } else {
+        const parts = reportContent.split(/\s+/);
+        targetName = parts[0] || '';
+        reportReason = parts.slice(1).join(' ').trim();
+      }
+
+      // Search room for accused player to extract their full identity, socket ID, and IP address
+      let targetPlayer = null;
+      if (room && targetName) {
+        for (const p of room.players.values()) {
+          if (p.name.toLowerCase() === targetName.toLowerCase() || p.id === targetName) {
+            targetPlayer = p;
+            break;
+          }
+        }
+      }
+
       console.log('\n========================================');
       console.log('🚨 [USER ABUSE / DMCA / SAFETY REPORT]');
       console.log(`⏰ Time: ${timestamp}`);
       console.log(`🌐 Room: ${currentRoom}`);
       console.log(`👤 Reported By: "${playerData.name}" (Socket: ${socket.id}, IP: ${clientIp})`);
-      console.log(`📝 Report Details: ${reportContent || '(No reason specified)'}`);
+      if (targetPlayer) {
+        console.log(`🎯 ACCUSED USER FOUND:`);
+        console.log(`   - Name: "${targetPlayer.name}"`);
+        console.log(`   - Socket ID: ${targetPlayer.id}`);
+        console.log(`   - IP Address: ${targetPlayer.ip}`);
+        console.log(`   - Joined Room: ${new Date(targetPlayer.joinedAt).toISOString()}`);
+        console.log(`   - Current Position: (X: ${targetPlayer.x.toFixed(1)}, Z: ${targetPlayer.z.toFixed(1)})`);
+      } else if (targetName) {
+        console.log(`🎯 Accused Target Name: "${targetName}" (Not currently found in room)`);
+      }
+      console.log(`📝 Reason / Details: ${reportReason || '(No additional details specified)'}`);
       console.log('========================================\n');
 
       // Send private system confirmation back only to the reporting user
       socket.emit('chat-message', {
         id: 'system',
         name: '🛡️ Safety System',
-        message: 'Your report has been logged to the server for administrator review. Thank you for keeping the community safe.',
+        message: targetPlayer 
+          ? `Report for "${targetPlayer.name}" logged. Admin notified with IP & network timestamps.`
+          : 'Your report has been logged to the server logs for administrator review.',
         image: null,
         timestamp: Date.now()
       });

@@ -19,14 +19,16 @@ export class MidiManager {
     this.isSupported = Boolean(navigator.requestMIDIAccess);
     this.connectedDeviceNames = [];
 
-    // Python MIDI Bridge WebSocket State
+    // Python MIDI Bridge WebSocket State (Disabled by default so browser does not spam ERR_CONNECTION_REFUSED)
+    const savedBridge = localStorage.getItem('midi_bridge_enabled') === 'true';
+    this.isBridgeEnabled = savedBridge;
     this.bridgeSocket = null;
     this.isBridgeConnected = false;
     this.bridgeReconnectTimer = null;
   }
 
   async init() {
-    // 1. Initialize Web MIDI hardware access if supported
+    // 1. Initialize native Web MIDI hardware access if supported (zero external ports needed)
     if (this.isSupported) {
       try {
         this.midiAccess = await navigator.requestMIDIAccess({ sysex: false });
@@ -43,15 +45,43 @@ export class MidiManager {
       console.warn('[MIDI] Web MIDI API not supported in this browser environment.');
     }
 
-    // 2. Initialize Python MIDI Bridge WebSocket connection
-    this.connectBridge();
+    // 2. Only connect to Python MIDI bridge if explicitly enabled
+    if (this.isBridgeEnabled) {
+      this.connectBridge();
+    }
     return true;
+  }
+
+  setBridgeEnabled(enabled) {
+    this.isBridgeEnabled = Boolean(enabled);
+    localStorage.setItem('midi_bridge_enabled', this.isBridgeEnabled ? 'true' : 'false');
+    if (this.isBridgeEnabled) {
+      this.connectBridge();
+    } else {
+      this.disconnectBridge();
+    }
+  }
+
+  disconnectBridge() {
+    if (this.bridgeReconnectTimer) {
+      clearTimeout(this.bridgeReconnectTimer);
+      this.bridgeReconnectTimer = null;
+    }
+    if (this.bridgeSocket) {
+      this.bridgeSocket.onclose = null;
+      this.bridgeSocket.onerror = null;
+      this.bridgeSocket.close();
+      this.bridgeSocket = null;
+    }
+    this.isBridgeConnected = false;
+    this.updateDeviceList();
   }
 
   /**
    * Connect to Python MIDI Bridge WebSocket Server
    */
   connectBridge() {
+    if (!this.isBridgeEnabled) return;
     if (this.bridgeSocket && (this.bridgeSocket.readyState === WebSocket.OPEN || this.bridgeSocket.readyState === WebSocket.CONNECTING)) {
       return;
     }
@@ -76,28 +106,31 @@ export class MidiManager {
 
       this.bridgeSocket.onclose = () => {
         if (this.isBridgeConnected) {
-          console.log('[MIDI Bridge] 🔴 Disconnected from Python MIDI Bridge. Reconnecting...');
+          console.log('[MIDI Bridge] 🔴 Disconnected from Python MIDI Bridge.');
         }
         this.isBridgeConnected = false;
         this.updateDeviceList();
-        this.scheduleBridgeReconnect();
+        if (this.isBridgeEnabled) {
+          this.scheduleBridgeReconnect();
+        }
       };
 
       this.bridgeSocket.onerror = () => {
-        // Silently allow reconnection when Python bridge server isn't running yet
         this.bridgeSocket?.close();
       };
     } catch (err) {
-      this.scheduleBridgeReconnect();
+      if (this.isBridgeEnabled) {
+        this.scheduleBridgeReconnect();
+      }
     }
   }
 
   scheduleBridgeReconnect() {
-    if (this.bridgeReconnectTimer) return;
+    if (!this.isBridgeEnabled || this.bridgeReconnectTimer) return;
     this.bridgeReconnectTimer = setTimeout(() => {
       this.bridgeReconnectTimer = null;
       this.connectBridge();
-    }, 3000);
+    }, 5000);
   }
 
   /**
