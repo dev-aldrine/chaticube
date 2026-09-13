@@ -119,7 +119,97 @@
             </div>
 
             <div id="worlds-list-container" class="worlds-scroll-list"></div>
+
+            <div class="lobby-footer-terms">
+              <button type="button" id="btn-open-terms" class="terms-link-btn">
+                <i class="pixelart-icons-font-file-text" style="font-size: 13px; margin-right: 4px;"></i> Terms of Service & Privacy Agreement
+              </button>
+            </div>
           </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mandatory Terms of Service & Disclaimer Modal -->
+    <div id="terms-modal-overlay" class="terms-modal-overlay hidden">
+      <div class="terms-card">
+        <div class="terms-header">
+          <div class="terms-title-group">
+            <span class="terms-icon"><i class="pixelart-icons-font-shield"></i></span>
+            <div>
+              <h3>Terms of Service, Community Guidelines & Liability Waiver</h3>
+              <p class="terms-subtitle">Please read carefully before using Chaticube</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="terms-body-scroll">
+          <div class="terms-section">
+            <h4>1. Acceptance of Terms & Age Requirement (13+)</h4>
+            <p>
+              By accessing, browsing, or participating in Chaticube ("the Application"), you explicitly agree to be bound by these Terms of Service. You affirm that you are at least <strong>13 years of age</strong> (or the minimum legal age in your jurisdiction). If you are under the legal age of majority, you represent that your legal guardian has reviewed and agreed to these terms on your behalf.
+            </p>
+          </div>
+
+          <div class="terms-section alert-section">
+            <h4>2. Unmonitored User Content, Image Uploads & Voice Disclaimer</h4>
+            <p>
+              Chaticube enables real-time peer-to-peer multiplayer interactions, including text chat, image attachment sharing, voice chat, and 3D sandbox block building. 
+              <strong>All media, images, and voice communications transmitted in the Application are user-generated, real-time, and unmonitored.</strong>
+            </p>
+            <p>
+              The creators, developers, operators, and hosting providers of Chaticube do not actively pre-screen, censor, or monitor user uploads. You participate at your own discretion and acknowledge that you may be exposed to unfiltered user-generated content.
+            </p>
+          </div>
+
+          <div class="terms-section">
+            <h4>3. Zero Data Collection & Privacy Policy</h4>
+            <p>
+              <strong>We do not collect, sell, monetize, or track your personal data.</strong>
+            </p>
+            <ul>
+              <li><strong>No Tracking:</strong> No tracking cookies, advertising analytics, or telemetry profiles are created or stored on external servers.</li>
+              <li><strong>Ephemeral Communications:</strong> Chat messages and in-memory image attachments are broadcast in real-time to active room peers and are not retained in permanent user databases.</li>
+              <li><strong>Direct Peer-to-Peer Audio:</strong> Voice audio is transmitted directly between participants via encrypted WebRTC connections without traversing application audio recording servers.</li>
+              <li><strong>Local Storage:</strong> Preferences (such as color customization, volume, sensitivity settings) are saved solely on your local device browser via <code>localStorage</code>.</li>
+            </ul>
+          </div>
+
+          <div class="terms-section">
+            <h4>4. User Conduct & Prohibited Content</h4>
+            <p>
+              You agree not to upload, broadcast, or transmit any material that is illegal, abusive, defamatory, harassing, sexually explicit, harmful, or infringing on intellectual property. The developer reserves the right to ban IPs or terminate room access for abusive conduct without notice.
+            </p>
+          </div>
+
+          <div class="terms-section">
+            <h4>5. Complete Disclaimer of Warranties ("AS-IS")</h4>
+            <p>
+              THE APPLICATION IS PROVIDED ON AN "AS IS" AND "AS AVAILABLE" BASIS WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. THE DEVELOPER DISCLAIMS ALL WARRANTIES, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+            </p>
+          </div>
+
+          <div class="terms-section">
+            <h4>6. Absolute Limitation of Liability & Hold Harmless Waiver</h4>
+            <p>
+              <strong>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, UNDER NO CIRCUMSTANCES SHALL THE DEVELOPER, CREATOR, OR ASSOCIATED PARTIES BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, PUNITIVE, OR EXEMPLARY DAMAGES</strong> (INCLUDING BUT NOT LIMITED TO LOSS OF DATA, DEVICE DAMAGE, EMOTIONAL DISTRESS, OR EXPOSURE TO USER-GENERATED CONTENT) ARISING OUT OF OR IN CONNECTION WITH YOUR USE OR INABILITY TO USE THE APPLICATION.
+            </p>
+            <p>
+              <strong>YOU AGREE TO INDEMNIFY, DEFEND, AND HOLD HARMLESS THE DEVELOPER FROM ANY AND ALL CLAIMS, LAWSUITS, LIABILITIES, LOSSES, OR LEGAL EXPENSES INCURRED AS A RESULT OF YOUR PARTICIPATION IN THE APPLICATION.</strong>
+            </p>
+          </div>
+        </div>
+
+        <div class="terms-footer">
+          <label class="terms-checkbox-label" id="terms-agree-label">
+            <input type="checkbox" id="checkbox-agree-terms" />
+            <span>I have read, understood, and agree to the Terms of Service & Liability Waiver</span>
+          </label>
+          <div class="terms-btn-row">
+            <button type="button" id="btn-accept-terms" class="btn-primary btn-accept-terms" disabled>
+              <span>Accept & Continue</span> <i class="pixelart-icons-font-check" style="font-size: 16px;"></i>
+            </button>
+          </div>
         </div>
       </div>
     </div>

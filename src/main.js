@@ -182,15 +182,64 @@ class GameApp {
       this.worldsBrowser.setFilter(e.target.value);
     });
 
+    // Terms of Service Modal Logic
+    this.setupTermsModal();
+
     // Join Room Form
     document.getElementById('join-room-form')?.addEventListener('submit', (e) => {
       e.preventDefault();
+      const hasAgreed = localStorage.getItem('chaticube_terms_agreed') === 'true';
+      if (!hasAgreed) {
+        this.openTermsModal();
+        return;
+      }
       const name = nameInput.value.trim() || this.playerName;
       const room = roomInput.value.trim() || 'default-room';
       this.playerName = name;
       this.currentRoom = room;
       this.startJoinFlow(room);
     });
+  }
+
+  setupTermsModal() {
+    const overlay = document.getElementById('terms-modal-overlay');
+    const checkbox = document.getElementById('checkbox-agree-terms');
+    const acceptBtn = document.getElementById('btn-accept-terms');
+    const openBtn = document.getElementById('btn-open-terms');
+
+    if (!overlay || !checkbox || !acceptBtn) return;
+
+    // Check if user has previously agreed
+    const hasAgreed = localStorage.getItem('chaticube_terms_agreed') === 'true';
+    if (!hasAgreed) {
+      overlay.classList.remove('hidden');
+    }
+
+    // Toggle button state based on agreement checkbox
+    checkbox.addEventListener('change', () => {
+      acceptBtn.disabled = !checkbox.checked;
+    });
+
+    // Accept button click
+    acceptBtn.addEventListener('click', () => {
+      if (checkbox.checked) {
+        localStorage.setItem('chaticube_terms_agreed', 'true');
+        overlay.classList.add('hidden');
+        Notifications.show('Terms of Service accepted', 'success', 2000);
+      }
+    });
+
+    // Manual view from footer button
+    openBtn?.addEventListener('click', () => {
+      overlay.classList.remove('hidden');
+      checkbox.checked = true;
+      acceptBtn.disabled = false;
+    });
+  }
+
+  openTermsModal() {
+    const overlay = document.getElementById('terms-modal-overlay');
+    if (overlay) overlay.classList.remove('hidden');
   }
 
   renderColorSwatches(containerId, colors, category) {
@@ -678,10 +727,10 @@ class GameApp {
       }
     };
 
-    // Connect to all existing remote players in the room
+    // Connect to all existing remote players in the room (joining player listens; existing players initiate)
     roomData.players.forEach(p => {
       if (p.id !== roomData.selfId) {
-        this.voiceChatManager.connectToPeer(p.id, true);
+        this.voiceChatManager.connectToPeer(p.id, false);
       }
     });
 
@@ -693,6 +742,8 @@ class GameApp {
       initialReverb: this.pianoEngine.reverbLevel,
       initialVelocityCurve: this.pianoEngine.velocityCurve,
       initialFloatingNotes: this.showFloatingNotes,
+      initialAudioProcessing: this.voiceChatManager.audioProcessingEnabled,
+      initialInputThreshold: this.voiceChatManager.inputThreshold,
       onToggleMic: async () => {
         if (!this.voiceChatManager) return;
         const micActive = await this.voiceChatManager.toggleMic();
@@ -718,6 +769,21 @@ class GameApp {
           await this.pianoEngine.setAudioOutputDevice(deviceId);
         }
         Notifications.show('Audio output device updated', 'info', 2000);
+      },
+      onAudioProcessingToggle: async (enabled) => {
+        if (this.voiceChatManager) {
+          await this.voiceChatManager.setAudioProcessing(enabled);
+          if (enabled) {
+            Notifications.show('Audio Processing Enabled (Echo Cancellation & Noise Suppression ON)', 'info', 2500);
+          } else {
+            Notifications.show('Raw Audio Mode Enabled (100% Unprocessed Sound)', 'success', 2500);
+          }
+        }
+      },
+      onInputThresholdChange: (threshold) => {
+        if (this.voiceChatManager) {
+          this.voiceChatManager.setInputThreshold(threshold);
+        }
       },
       onVolumeChange: (vol) => {
         this.pianoEngine.setVolume(vol);

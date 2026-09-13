@@ -25,10 +25,77 @@ export class VoiceChatManager {
     this.onMicStatusChange = null; // Callback for local UI
     this.onRemoteVoiceActivity = null; // Callback: (id, isSpeaking)
 
-    this.selectedAudioInputId = '';
-    this.selectedAudioOutputId = '';
+    // Audio Processing toggles (Echo Cancellation, Noise Suppression, Auto Gain)
+    const savedProcessing = localStorage.getItem('voice_audio_processing');
+    this.audioProcessingEnabled = savedProcessing !== null ? savedProcessing === 'true' : false; // Defaults to RAW as requested!
+
+    // Input Sensitivity Threshold: 0 to 100 (Default 15)
+    const savedThreshold = parseInt(localStorage.getItem('voice_input_threshold'), 10);
+    this.inputThreshold = !isNaN(savedThreshold) ? savedThreshold : 15;
 
     this.setupNetworkCallbacks();
+  }
+
+  async setAudioProcessing(enabled) {
+    this.audioProcessingEnabled = Boolean(enabled);
+    localStorage.setItem('voice_audio_processing', this.audioProcessingEnabled ? 'true' : 'false');
+    if (this.localStream) {
+      await this.reacquireLocalStream();
+    }
+  }
+
+  setInputThreshold(threshold) {
+    this.inputThreshold = Math.max(1, Math.min(100, threshold));
+    localStorage.setItem('voice_input_threshold', this.inputThreshold.toString());
+  }
+
+  async reacquireLocalStream() {
+    try {
+      const constraints = {
+        audio: {
+          echoCancellation: this.audioProcessingEnabled,
+          noiseSuppression: this.audioProcessingEnabled,
+          autoGainControl: this.audioProcessingEnabled
+        },
+        video: false
+      };
+      if (this.selectedAudioInputId) {
+        constraints.audio.deviceId = { exact: this.selectedAudioInputId };
+      }
+
+      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const newTrack = newStream.getAudioTracks()[0];
+      if (!newTrack) return;
+
+      newTrack.enabled = !this.isMuted;
+
+      // Replace tracks in all existing peer connections
+      for (const peer of this.peers.values()) {
+        if (peer.peerConnection) {
+          const senders = peer.peerConnection.getSenders();
+          const sender = senders.find(s => s.track && s.track.kind === 'audio');
+          if (sender) {
+            await sender.replaceTrack(newTrack);
+          }
+        }
+      }
+
+      // Stop old tracks
+      if (this.localStream) {
+        this.localStream.getAudioTracks().forEach(t => t.stop());
+      }
+      this.localStream = newStream;
+
+      // Reconnect analyzer
+      if (this.audioContext) {
+        const source = this.audioContext.createMediaStreamSource(this.localStream);
+        if (this.analyser) {
+          source.connect(this.analyser);
+        }
+      }
+    } catch (err) {
+      console.warn('[VoiceChat] Error reacquiring audio stream with new constraints:', err);
+    }
   }
 
   async getAudioDevices() {
@@ -48,49 +115,8 @@ export class VoiceChatManager {
 
   async setAudioInputDevice(deviceId) {
     this.selectedAudioInputId = deviceId;
-    if (!this.localStream) return;
-
-    try {
-      const constraints = {
-        audio: {
-          deviceId: deviceId ? { exact: deviceId } : undefined,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
-      };
-
-      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-      const newTrack = newStream.getAudioTracks()[0];
-      if (!newTrack) return;
-
-      newTrack.enabled = !this.isMuted;
-
-      // Replace tracks in all existing peer connections
-      for (const peer of this.peers.values()) {
-        if (peer.peerConnection) {
-          const senders = peer.peerConnection.getSenders();
-          const sender = senders.find(s => s.track && s.track.kind === 'audio');
-          if (sender) {
-            sender.replaceTrack(newTrack);
-          }
-        }
-      }
-
-      // Stop old tracks
-      this.localStream.getAudioTracks().forEach(t => t.stop());
-      this.localStream = newStream;
-
-      // Reconnect analyzer
-      if (this.audioContext) {
-        const source = this.audioContext.createMediaStreamSource(this.localStream);
-        if (this.analyser) {
-          source.connect(this.analyser);
-        }
-      }
-    } catch (err) {
-      console.warn('[VoiceChat] Error switching audio input device:', err);
+    if (this.localStream) {
+      await this.reacquireLocalStream();
     }
   }
 
@@ -125,9 +151,9 @@ export class VoiceChatManager {
     try {
       const constraints = {
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
+          echoCancellation: this.audioProcessingEnabled,
+          noiseSuppression: this.audioProcessingEnabled,
+          autoGainControl: this.audioProcessingEnabled
         },
         video: false
       };
@@ -151,23 +177,16 @@ export class VoiceChatManager {
 
       this.startVoiceActivityDetection();
 
-      // Renegotiate with all peers to add audio track
-      for (const [targetId, peer] of this.peers.entries()) {
+      // Replace audio track across existing senders or add track
+      for (const peer of this.peers.values()) {
         if (peer.peerConnection) {
           const track = this.localStream.getAudioTracks()[0];
           if (track) {
-            const existingSender = peer.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
-            if (existingSender) {
-              await existingSender.replaceTrack(track);
+            const sender = peer.peerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+            if (sender) {
+              await sender.replaceTrack(track);
             } else {
               peer.peerConnection.addTrack(track, this.localStream);
-              try {
-                const offer = await peer.peerConnection.createOffer();
-                await peer.peerConnection.setLocalDescription(offer);
-                this.networkManager.sendVoiceSignal(targetId, { sdp: peer.peerConnection.localDescription });
-              } catch (e) {
-                console.warn('[VoiceChat] Error renegotiating after mic init:', e);
-              }
             }
           }
         }
@@ -212,7 +231,7 @@ export class VoiceChatManager {
           sum += this.analyserData[i];
         }
         const average = sum / this.analyserData.length;
-        const speakingNow = average > 14; // Sensitivity threshold
+        const speakingNow = average >= this.inputThreshold; // Dynamic Input Sensitivity threshold
 
         if (speakingNow !== this.isSpeaking) {
           this.isSpeaking = speakingNow;
@@ -231,26 +250,41 @@ export class VoiceChatManager {
     if (this.peers.has(targetId)) return;
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const myId = this.networkManager.selfId || '';
+    // Polite peer pattern: peer with alphabetically higher ID yields to avoid glare
+    const isPolite = myId > targetId;
 
     const peerInfo = {
       peerConnection: pc,
       remoteStream: null,
       audioElement: null,
-      pendingCandidates: []
+      pendingCandidates: [],
+      isPolite,
+      makingOffer: false
     };
     this.peers.set(targetId, peerInfo);
 
-    // Add local mic stream tracks if available, or create dummy audio transceiver for two-way audio
+    // Add local mic stream tracks if available, or create audio transceiver for receiving remote voice
     if (this.localStream && this.localStream.getAudioTracks().length > 0) {
       this.localStream.getTracks().forEach(track => pc.addTrack(track, this.localStream));
     } else {
-      // Ensure browser is prepared to receive remote audio even if local mic is not yet enabled
       try {
         pc.addTransceiver('audio', { direction: 'sendrecv' });
-      } catch (e) {
-        // Fallback for older WebRTC implementations
-      }
+      } catch (e) {}
     }
+
+    // Standard W3C Perfect Negotiation handler
+    pc.onnegotiationneeded = async () => {
+      try {
+        peerInfo.makingOffer = true;
+        await pc.setLocalDescription(await pc.createOffer({ offerToReceiveAudio: true }));
+        this.networkManager.sendVoiceSignal(targetId, { sdp: pc.localDescription });
+      } catch (err) {
+        console.warn(`[VoiceChat] Negotiation error with ${targetId}:`, err);
+      } finally {
+        peerInfo.makingOffer = false;
+      }
+    };
 
     // Send ICE candidates to peer
     pc.onicecandidate = (event) => {
@@ -267,11 +301,16 @@ export class VoiceChatManager {
 
     if (isInitiator) {
       try {
+        peerInfo.makingOffer = true;
         const offer = await pc.createOffer({ offerToReceiveAudio: true });
-        await pc.setLocalDescription(offer);
-        this.networkManager.sendVoiceSignal(targetId, { sdp: pc.localDescription });
+        if (pc.signalingState === 'stable') {
+          await pc.setLocalDescription(offer);
+          this.networkManager.sendVoiceSignal(targetId, { sdp: pc.localDescription });
+        }
       } catch (err) {
-        console.warn(`[VoiceChat] Create offer failed for ${targetId}:`, err);
+        console.warn(`[VoiceChat] Initial offer failed for ${targetId}:`, err);
+      } finally {
+        peerInfo.makingOffer = false;
       }
     }
   }
@@ -288,7 +327,27 @@ export class VoiceChatManager {
 
     try {
       if (signal.sdp) {
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        const description = new RTCSessionDescription(signal.sdp);
+        const readyForOffer = !peer.makingOffer && (pc.signalingState === 'stable' || pc.signalingState === 'have-local-offer');
+        const offerCollision = description.type === 'offer' && !readyForOffer;
+
+        if (offerCollision) {
+          if (!peer.isPolite) {
+            // Impolite peer ignores colliding offer
+            return;
+          }
+          // Polite peer rolls back local offer to accept incoming offer
+          if (pc.signalingState === 'have-local-offer') {
+            await pc.setLocalDescription({ type: 'rollback' });
+          }
+        }
+
+        if (description.type === 'answer' && pc.signalingState !== 'have-local-offer') {
+          // Ignore answer if we are not waiting for one
+          return;
+        }
+
+        await pc.setRemoteDescription(description);
 
         // Flush any ICE candidates that arrived before remoteDescription was set
         if (peer.pendingCandidates && peer.pendingCandidates.length > 0) {
@@ -302,8 +361,8 @@ export class VoiceChatManager {
           peer.pendingCandidates = [];
         }
 
-        if (signal.sdp.type === 'offer') {
-          // If we have local stream, ensure audio track is added
+        if (description.type === 'offer') {
+          // If we have local stream, ensure audio tracks are attached
           if (this.localStream) {
             this.localStream.getTracks().forEach(t => {
               if (!pc.getSenders().find(s => s.track === t)) {
@@ -311,15 +370,20 @@ export class VoiceChatManager {
               }
             });
           }
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          this.networkManager.sendVoiceSignal(senderId, { sdp: pc.localDescription });
+          if (pc.signalingState === 'have-remote-offer') {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            this.networkManager.sendVoiceSignal(senderId, { sdp: pc.localDescription });
+          }
         }
       } else if (signal.candidate) {
         if (pc.remoteDescription && pc.remoteDescription.type) {
-          await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          } catch (err) {
+            console.warn(`[VoiceChat] ICE candidate error with ${senderId}:`, err);
+          }
         } else {
-          // Queue candidate until remoteDescription is set
           if (!peer.pendingCandidates) peer.pendingCandidates = [];
           peer.pendingCandidates.push(signal.candidate);
         }
@@ -411,6 +475,9 @@ export class VoiceChatManager {
       if (peer.audioElement) {
         peer.audioElement.pause();
         peer.audioElement.srcObject = null;
+        if (peer.audioElement.parentNode) {
+          peer.audioElement.parentNode.removeChild(peer.audioElement);
+        }
       }
       if (peer.peerConnection) {
         peer.peerConnection.close();

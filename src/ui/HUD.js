@@ -14,10 +14,14 @@ export class HUD {
     onToggleMic,
     onMicDeviceChange,
     onOutputDeviceChange,
+    onAudioProcessingToggle,
+    onInputThresholdChange,
     initialVolume = 0.70, 
     initialReverb = 0.12,
     initialVelocityCurve = 'linear',
-    initialFloatingNotes = true 
+    initialFloatingNotes = true,
+    initialAudioProcessing = false,
+    initialInputThreshold = 15
   }) {
     this.container = container;
     this.onToolSelect = onToolSelect;
@@ -31,12 +35,16 @@ export class HUD {
     this.onToggleMic = onToggleMic;
     this.onMicDeviceChange = onMicDeviceChange;
     this.onOutputDeviceChange = onOutputDeviceChange;
+    this.onAudioProcessingToggle = onAudioProcessingToggle;
+    this.onInputThresholdChange = onInputThresholdChange;
     this.isMicOn = false;
     this.isSpeaking = false;
     this.volume = initialVolume;
     this.reverbLevel = initialReverb;
     this.velocityCurve = initialVelocityCurve;
     this.showFloatingNotes = initialFloatingNotes;
+    this.audioProcessing = initialAudioProcessing;
+    this.inputThreshold = initialInputThreshold;
 
     this.activeTool = 'wall'; // 'wall' | 'floor' | 'remove' | 'emote'
     this.players = [];
@@ -143,6 +151,29 @@ export class HUD {
                   <option value="">Default Microphone</option>
                 </select>
               </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Mic Input Sensitivity Threshold</span>
+                <span class="setting-desc">Voice activation gate level (Lower = more sensitive / captures quiet voice &bull; Higher = background noise gate)</span>
+              </div>
+              <div class="setting-control">
+                <span class="volume-icon"><i class="pixelart-icons-font-audio"></i></span>
+                <input type="range" id="input-threshold-slider" class="range-slider" min="1" max="60" value="${this.inputThreshold}" />
+                <span id="input-threshold-value-text" class="volume-val-badge">${this.inputThreshold}</span>
+              </div>
+            </div>
+
+            <div class="setting-row horizontal">
+              <div class="setting-info">
+                <span class="setting-label">Raw Audio (Disable Processing)</span>
+                <span class="setting-desc">Turn OFF browser DSP (Echo Cancellation, Noise Suppression & Auto Gain) for 100% natural, unprocessed microphone sound</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="toggle-audio-processing" ${!this.audioProcessing ? 'checked' : ''} />
+                <span class="toggle-slider"></span>
+              </label>
             </div>
 
             <div class="setting-row">
@@ -579,6 +610,29 @@ export class HUD {
     micDeviceSelect?.addEventListener('change', (e) => {
       if (this.onMicDeviceChange) {
         this.onMicDeviceChange(e.target.value);
+      }
+    });
+
+    // Mic Input Sensitivity Threshold Slider
+    const thresholdSlider = this.container.querySelector('#input-threshold-slider');
+    const thresholdValText = this.container.querySelector('#input-threshold-value-text');
+    thresholdSlider?.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      this.inputThreshold = val;
+      if (thresholdValText) thresholdValText.textContent = `${val}`;
+      if (this.onInputThresholdChange) {
+        this.onInputThresholdChange(val);
+      }
+    });
+
+    // Raw Audio / Audio Processing Toggle
+    const processingToggle = this.container.querySelector('#toggle-audio-processing');
+    processingToggle?.addEventListener('change', (e) => {
+      // Checkbox is checked when user wants "Raw Audio" (i.e. audioProcessing = false)
+      const isRaw = e.target.checked;
+      this.audioProcessing = !isRaw;
+      if (this.onAudioProcessingToggle) {
+        this.onAudioProcessingToggle(this.audioProcessing);
       }
     });
 
