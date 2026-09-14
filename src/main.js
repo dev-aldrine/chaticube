@@ -98,8 +98,10 @@ class GameApp {
     this.lastFrameTime = performance.now();
     this.isLoopRunning = false;
 
-    // Initialize Terms of Service modal immediately so user can read/accept during preload
+    // Initialize Modals immediately so DOM events are always active
     this.setupTermsModal();
+    this.setupSponsorModal();
+    this.setupAdWidget();
 
     this.init();
   }
@@ -427,6 +429,10 @@ class GameApp {
       this.updateHUDPlayerList();
     };
 
+    // Setup Sponsor Notice Modal & Ad Widgets
+    this.setupSponsorModal();
+    this.setupAdWidget();
+
     this.networkManager.connect();
   }
 
@@ -440,14 +446,101 @@ class GameApp {
     if (subEl && subtext) subEl.textContent = subtext;
   }
 
+  setupAdWidget() {
+    if (this._adWidgetInitialized) return;
+    this._adWidgetInitialized = true;
+
+    const closeBtn = document.getElementById('btn-close-ad-widget');
+    const widget = document.getElementById('bottom-right-ad-widget');
+    if (closeBtn && widget) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        widget.classList.add('collapsed');
+      });
+    }
+  }
+
+  setupSponsorModal() {
+    if (this._sponsorModalInitialized) return;
+    this._sponsorModalInitialized = true;
+
+    this.sponsorTimer = null;
+    this.pendingRoomToJoin = null;
+
+    const overlay = document.getElementById('sponsor-modal-overlay');
+    const proceedBtn = document.getElementById('btn-proceed-join');
+    const cancelBtn = document.getElementById('btn-cancel-join');
+
+    proceedBtn?.addEventListener('click', () => {
+      this.confirmSponsorAndJoin();
+    });
+
+    cancelBtn?.addEventListener('click', () => {
+      if (this.sponsorTimer) {
+        clearInterval(this.sponsorTimer);
+        this.sponsorTimer = null;
+      }
+      overlay?.classList.add('hidden');
+      this.pendingRoomToJoin = null;
+    });
+  }
+
   startJoinFlow(roomName) {
+    this.pendingRoomToJoin = roomName;
+    const overlay = document.getElementById('sponsor-modal-overlay');
+    const roomLabel = document.getElementById('sponsor-target-room-name');
+    const countNum = document.getElementById('sponsor-countdown-num');
+    const countBar = document.getElementById('sponsor-countdown-bar');
+
+    if (roomLabel) roomLabel.textContent = `"${roomName}"`;
+    if (countNum) countNum.textContent = '3';
+    if (countBar) countBar.style.width = '100%';
+
+    overlay?.classList.remove('hidden');
+
+    let timeLeft = 3;
+    if (this.sponsorTimer) clearInterval(this.sponsorTimer);
+
+    this.sponsorTimer = setInterval(() => {
+      timeLeft--;
+      if (countNum) countNum.textContent = String(Math.max(0, timeLeft));
+      if (countBar) countBar.style.width = `${(timeLeft / 3) * 100}%`;
+
+      if (timeLeft <= 0) {
+        clearInterval(this.sponsorTimer);
+        this.sponsorTimer = null;
+        this.confirmSponsorAndJoin();
+      }
+    }, 1000);
+  }
+
+  confirmSponsorAndJoin() {
+    if (this.sponsorTimer) {
+      clearInterval(this.sponsorTimer);
+      this.sponsorTimer = null;
+    }
+
+    const overlay = document.getElementById('sponsor-modal-overlay');
+    overlay?.classList.add('hidden');
+
+    const roomName = this.pendingRoomToJoin || this.currentRoom || 'default-room';
+    this.pendingRoomToJoin = null;
+
+    // Trigger Adsterra Sponsored Ad Direct Link
+    const AD_DIRECT_LINK = 'https://www.profitableratecpmnetwork.com/bawhq7w4b?key=083af9adbd57c91de67f753363caba84';
+    try {
+      window.open(AD_DIRECT_LINK, '_blank');
+    } catch (err) {
+      console.warn('Ad popup blocked or failed:', err);
+    }
+
     const loading = document.getElementById('loading-overlay');
     loading?.classList.remove('hidden');
-    this.updateLoadingProgress(20, 'Connecting to Server...', `Joining world "${roomName}"`);
+    this.updateLoadingProgress(30, 'Connecting to Server...', `Entering world "${roomName}"`);
 
     setTimeout(() => {
       this.networkManager.joinRoom(roomName, this.playerName, this.playerColors);
-    }, 150);
+    }, 250);
   }
 
   async onRoomJoined(data) {
